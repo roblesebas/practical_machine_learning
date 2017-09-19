@@ -1,0 +1,150 @@
+---
+title: "Practical Machine Learning - Project"
+author: "Sebastian Robledo"
+date: "September 10, 2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:/Users/Sebastian/Google Drive/CURSOS/DATA SCIENCE/Coursera/H Machine Learning/practical_machine_learning")
+```
+
+```{r calling libraries, warning=FALSE, message=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+library(knitr)
+```
+
+# Coursera Project
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: [data](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har) (see the section on the Weight Lifting Exercise Dataset)
+
+## Data
+
+The training data for this project are available here:
+
+[training data](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv)
+
+The test data are available here:
+
+[test](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv)
+
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+## Goal
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+# Getting Data
+
+```{r Getting Data}
+trainUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+training <- read.csv(url(trainUrl), na.strings = c("NA",""))
+test <- read.csv(url(testUrl), na.strings = c("NA",""))
+```
+
+# Cleaning data
+
+Deleting variables that contain missing values
+
+```{r Cleaning Data}
+training <- training[, colSums(is.na(training)) == 0]
+test <- test[, colSums(is.na(test)) == 0]
+```
+
+Deleting variables with low power prediction (first 7)
+
+```{r Deleting data}
+training.cleaned <- training[,-c(1:7)]
+test.cleaned <- test[,-c(1:7)]
+dim(training.cleaned); dim(test.cleaned)
+```
+
+training.cleaned data set has 19622 rows and 53 columns. test.cleaned data set has 20 rows and 53 columns.
+
+# Spliting the data
+
+Creating the train and test data set in order to get out-of-sample errors. The training.cleaned data were split into 60% and 40% (test).
+```{r spliting data}
+set.seed(1234)
+inTrain <- createDataPartition(training.cleaned$classe, p=0.6, list=FALSE)
+training.train <- training.cleaned[inTrain, ]
+training.valid <- training.cleaned[-inTrain, ]
+dim(training.train); dim(training.valid)
+```
+
+# Prediction Algorithms
+
+I used classification trees and random forest to predict the results
+
+## Classificacion Trees
+
+I am going to train my dataset
+```{r Classification Trees}
+control <- trainControl(method = "cv", number = 5)
+fit_rpart <- train(classe ~ ., data = training.train, method = "rpart",
+                   trControl = control)
+print(fit_rpart, digits = 4)
+```
+```{r}
+fancyRpartPlot(fit_rpart$finalModel)
+```
+
+Predicting results using the valid set 
+```{r Predicting results}
+predict_rpart <- predict(fit_rpart, training.valid)
+(conf_rpart <- confusionMatrix(training.valid$classe, predict_rpart))
+```
+```{r}
+(accuracy_rpart <- conf_rpart$overall[1])
+```
+
+Using classification tree does not predict the outcome classe 
+
+# Random Forest
+
+Therefore, I will use random forest. Thanks to [kaggle forum post](https://www.kaggle.com/general/7951) because the original take a lot of time to process in my pc.
+
+```{r Random Forest, warning=FALSE}
+library(randomForest)
+mtry <- tuneRF(training.train[,-53], training.train$classe, ntreeTry=500, stepFactor=1.5,improve=0.01, 
+               plot=FALSE, trace=TRUE, dobest=FALSE)
+fit_rt <- randomForest(classe~., data=training.train, mtry=9, ntree=500)
+```
+
+Predicting the outcomes using a valid set
+
+```{r Predicting outcomes}
+predict_rf <- predict(fit_rt, training.valid)
+conf_rf <- confusionMatrix(training.valid$classe, predict_rf)
+conf_rf
+```
+
+```{r Accuracy}
+accuracy_rf <- conf_rf$overall[1]
+accuracy_rf
+```
+
+Much better!
+
+# Prediction on testing set
+
+I will test the results with the test initial data
+
+```{r Testing set prediction}
+(predict(fit_rt, test.cleaned))
+
+```
+
